@@ -22,12 +22,13 @@ const ZoomImage =({ src, alt, width = "100%", height = 550 }) => {
         onClick={handleOpen}
       />
 
-      <Modal show={showModal} onHide={handleClose} centered size="lg">
+      <Modal show={showModal} onHide={handleClose} centered size="lg" style={{marginLeft:"4%",}}>
         <Modal.Body style={{ padding: 0 }}>
           <img
             src={src}
             alt={alt}
                    style={{
+                    
           width: "100%",
           height: "100%",
           objectFit: "cover",
