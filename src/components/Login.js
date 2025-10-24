@@ -96,7 +96,7 @@ const LoginPage = () => {
 
       // Navigate back after 3 seconds
       setTimeout(() => {
-        window.history.back();
+        window.href('/');
       }, 1000);
       
     } catch (error) {

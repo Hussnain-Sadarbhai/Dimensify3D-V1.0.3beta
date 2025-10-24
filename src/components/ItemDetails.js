@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import ZoomImage from './ZoomImage';
+
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -1241,7 +1243,7 @@ export default function ItemDetails() {
                     <div className="discount-badge">{product.off}% OFF</div>
                   )}
                   
-                  <img 
+                  <ZoomImage
                     src={product.images[currentImageIndex]} 
                     alt={product.modelName}
                     className="main-image"

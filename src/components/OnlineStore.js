@@ -239,13 +239,14 @@ export default function ProductStore() {
             sans-serif;
         }
 
+
         .online-header {
           background: linear-gradient(
-            316deg,
-            rgb(42, 101, 197) 0%,
-            rgb(10, 80, 177) 100%
+            180deg,
+            rgba(14, 58, 129, 1) 0%,
+            rgba(51, 118, 213, 1) 100%
           );
-          padding: 3rem 0;
+          padding: 2rem 0;
           box-shadow: 0 10px 40px rgba(42, 101, 197, 0.4);
           margin-bottom: 3rem;
           position: relative;
@@ -254,20 +255,21 @@ export default function ProductStore() {
 
         .online-header-title {
           color: white;
-          font-size: 3rem;
-          font-weight: 800;
+          font-size: 2.5rem;
+          font-weight: 400;
           text-align: center;
           margin: 0;
           letter-spacing: 2px;
           text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
           position: relative;
           z-index: 2;
+          font-family: 'Poppins', sans-serif;
         }
 
         .online-header-subtitle {
           color: rgba(255, 255, 255, 0.95);
           text-align: center;
-          font-size: 1.2rem;
+          font-size: 1.1rem;
           margin-top: 0.5rem;
           font-weight: 400;
           letter-spacing: 1px;

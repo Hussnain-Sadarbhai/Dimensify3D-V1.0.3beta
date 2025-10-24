@@ -14,6 +14,7 @@ const AdminOnlineStore = () => {
   const [showCustomCategory, setShowCustomCategory] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+const [updateImages, setUpdateImages] = useState([]);
 
   // Products list state
   const [products, setProducts] = useState([]);
@@ -193,33 +194,49 @@ const AdminOnlineStore = () => {
     setSelectedProduct(product);
     setShowUpdateModal(true);
   };
+const handleUpdateSubmit = async (e) => {
+  e.preventDefault();
 
-  const handleUpdateSubmit = async (e) => {
-    e.preventDefault();
-    
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/products/${selectedProduct.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(selectedProduct),
-      });
+  const formData = new FormData();
 
-      const data = await res.json();
-      if (data.success) {
-        alert("✅ Product updated successfully!");
-        setShowUpdateModal(false);
-        setSelectedProduct(null);
-        fetchProducts();
-      } else {
-        alert("❌ Update failed: " + data.message);
-      }
-    } catch (error) {
-      console.error("Error updating product:", error);
-      alert("❌ Server error");
+  // Append all editable fields except existing images
+  formData.append('modelName', selectedProduct.modelName);
+  formData.append('price', selectedProduct.price);
+  formData.append('off', selectedProduct.off);
+  formData.append('finalPrice', selectedProduct.finalPrice);
+  formData.append('description', selectedProduct.description || '');
+  formData.append('customizeQuestion', selectedProduct.customizeQuestion || '');
+  formData.append('category', selectedProduct.category);
+
+  // Append existing images URLs as JSON string (for backend to keep)
+  formData.append('existingImages', JSON.stringify(selectedProduct.images || []));
+
+  // Append new images if any
+  updateImages.forEach((file) => {
+    formData.append('images', file);
+  });
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/products/${selectedProduct.id}`, {
+      method: 'PUT',
+      body: formData, // Send as multipart/form-data
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert('✅ Product updated successfully!');
+      setShowUpdateModal(false);
+      setSelectedProduct(null);
+      setUpdateImages([]);
+      fetchProducts();
+    } else {
+      alert('❌ Update failed: ' + data.message);
     }
-  };
+  } catch (error) {
+    console.error('Error updating product:', error);
+    alert('❌ Server error');
+  }
+};
 
   const formatDate = (timestamp) => {
     return new Date(timestamp).toLocaleDateString('en-US', {
@@ -921,6 +938,75 @@ const AdminOnlineStore = () => {
                     style={inputStyle}
                   />
                 </Form.Group>
+  {selectedProduct.images && selectedProduct.images.length > 0 && (
+    <div style={{ marginBottom: '15px' }}>
+      <p style={{ fontWeight: '600' }}>Existing Images:</p>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        {selectedProduct.images.map((imgUrl, index) => (
+          <div key={index} style={{ position: 'relative' }}>
+            <img
+              src={imgUrl}
+              alt={`Product img ${index + 1}`}
+              style={{ width: '100px', height: '100px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #ccc' }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedProduct(prev => ({
+                  ...prev,
+                  images: prev.images.filter((_, i) => i !== index)
+                }));
+              }}
+              style={{
+                position: 'absolute',
+                top: '-6px',
+                right: '-6px',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '22px',
+                height: '22px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              &times;
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
+
+  {/* Then your file input for adding new images: */}
+  <Form.Group className="mb-3">
+    <Form.Label>Add New Images</Form.Label>
+    <Form.Control
+      type="file"
+      multiple
+      accept="image/*"
+      onChange={(e) => {
+        setUpdateImages(Array.from(e.target.files));
+      }}
+    />
+        <Form.Control
+      type="file"
+      multiple
+      accept="image/*"
+      onChange={(e) => {
+        setUpdateImages(Array.from(e.target.files));
+      }}
+    />
+        <Form.Control
+      type="file"
+      multiple
+      accept="image/*"
+      onChange={(e) => {
+        setUpdateImages(Array.from(e.target.files));
+      }}
+    />
+  </Form.Group>
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
                   <Button
