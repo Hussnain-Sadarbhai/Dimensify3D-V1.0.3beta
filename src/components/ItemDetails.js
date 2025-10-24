@@ -22,6 +22,9 @@ import {
 import API_BASE_URL from "./apiConfig";
 
 export default function ItemDetails() {
+    useEffect(() => {
+  window.scrollTo(0, 0);
+}, []);
   const location = useLocation();
   const navigate = useNavigate();
   const { product } = location.state || {};
