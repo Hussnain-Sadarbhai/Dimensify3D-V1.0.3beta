@@ -208,11 +208,14 @@ export default function ProductStore() {
 
   const handleLoginRedirect = () => {
     setShowLoginPopup(false);
+    localStorage.setItem("last",window.location.pathname);
+    console.log(localStorage);
     window.location.href = "/login";
   };
 
   const handleBackClick = () => {
-    window.history.back();
+    // window.history.back();
+    navigate('/');
   };
 
   const handleCartClick = () => {

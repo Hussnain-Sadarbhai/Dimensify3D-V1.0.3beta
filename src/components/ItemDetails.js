@@ -27,8 +27,10 @@ export default function ItemDetails() {
 }, []);
   const location = useLocation();
   const navigate = useNavigate();
-  const { product } = location.state || {};
+  const item=localStorage.getItem("product");
+const { product } = location.state || { product: item };
 
+  console.log(product);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showLoginPopup, setShowLoginPopup] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
@@ -51,7 +53,7 @@ export default function ItemDetails() {
   useEffect(() => {
     if (!product) {
       toast.error("No product data found. Redirecting...");
-      setTimeout(() => navigate('/online-store'), 2000);
+      setTimeout(() => navigate('/onlinestore'), 2000);
     }
   }, [product, navigate]);
 
@@ -205,6 +207,9 @@ export default function ItemDetails() {
 
   const handleLoginRedirect = () => {
     setShowLoginPopup(false);
+    localStorage.setItem("last","/onlinestore");
+    localStorage.setItem("product",product);
+    console.log(localStorage)
     navigate("/login");
   };
 

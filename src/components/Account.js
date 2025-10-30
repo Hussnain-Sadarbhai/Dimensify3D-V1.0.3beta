@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Badge, Nav, Dropdown, Button, Modal, Form } from 'react-bootstrap';
 import { User, ShoppingCart, Settings, Headphones, Calendar, MapPin, Package, Filter, HelpCircle, MessageSquare, Edit, Clock, CheckCircle, ArrowLeft } from 'lucide-react';
 import API_BASE_URL from './apiConfig';
+import { useNavigate,useLocation } from 'react-router-dom';
+
 
 const AccountSidebar = () => {
   const [userData, setUserData] = useState(null);
@@ -24,12 +26,35 @@ const AccountSidebar = () => {
   const [showLoginPopup, setShowLoginPopup] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
+  useEffect(() => {
+    // Push current path to history stack
+    // Then immediately replace previous history entry with root for back button to land at "/"
+    if (location.pathname !== '/') {
+      window.history.pushState(null, '', location.pathname);
+      window.history.replaceState(null, '', '/');
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      // When back button pressed, navigate to root if we are not already there
+      if (window.location.pathname !== '/') {
+        navigate('/', { replace: true });
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [navigate]);
   useEffect(() => {
     const userPhone = localStorage.getItem("dimensify3duserphoneNo");
     if (!userPhone) {
       setShowLoginPopup(true);
       setIsLoggedIn(false);
+    localStorage.setItem("last","/account");
+    console.log(localStorage);
       setTimeout(() => {
         window.location.href = "/login";
       }, 4000);

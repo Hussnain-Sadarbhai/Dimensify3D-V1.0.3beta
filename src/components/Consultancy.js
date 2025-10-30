@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Calendar, Upload, MessageCircle, Sparkles, CheckCircle, Clock, ArrowLeft } from "lucide-react";
 import { toast } from 'react-toastify';
 import API_BASE_URL from "./apiConfig";
-
+import { useNavigate,useLocation } from "react-router-dom";
 const Consultancy = () => {
   const [showLoginPopup, setShowLoginPopup] = useState(false);
   const [problem, setProblem] = useState("");
@@ -10,12 +10,15 @@ const Consultancy = () => {
   const [date, setDate] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(false);
-
+  const navigate=useNavigate();
+  const location=useLocation();
   useEffect(() => {
     const userPhone = localStorage.getItem("dimensify3duserphoneNo");
     if (!userPhone) {
       setShowLoginPopup(true);
       setIsLoggedIn(false);
+          localStorage.setItem("last","/consultancy");
+           console.log(localStorage);
       setTimeout(() => {
         window.location.href = "/login";
       }, 4000);
@@ -23,6 +26,17 @@ const Consultancy = () => {
       setIsLoggedIn(true);
     }
   }, []);
+
+
+  useEffect(() => {
+    // Push current path to history stack
+    // Then immediately replace previous history entry with root for back button to land at "/"
+    if (location.pathname !== '/') {
+      window.history.pushState(null, '', location.pathname);
+      window.history.replaceState(null, '', '/');
+    }
+  }, [location.pathname]);
+
 
   const toBase64 = (file) =>
     new Promise((resolve, reject) => {
@@ -462,7 +476,7 @@ const Consultancy = () => {
               <button
                 style={styles.backButton}
                 className="back-button"
-                onClick={() => window.history.back()}
+                onClick={() => navigate("/")}
                 title="Go Back"
               >
                 <ArrowLeft size={24} />

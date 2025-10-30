@@ -71,6 +71,8 @@ export default function Cart() {
   };
 
   const handleLoginRedirect = () => {
+    localStorage.setItem("last",window.location.pathname);
+    console.log(localStorage);
     window.location.href = '/login';
   };
 
@@ -712,7 +714,7 @@ export default function Cart() {
               <div className="d-flex align-items-center gap-3">
                 <button 
                   className="back-btn"
-                  onClick={() => window.history.back()}
+                  onClick={() =>navigate("/onlinestore")}
                 >
                   <ArrowLeft size={22} />
                 </button>

@@ -62,6 +62,8 @@ const Checkout = () => {
         const userPhone = localStorage.getItem("dimensify3duserphoneNo");
         if (!userPhone) {
           setShowLoginPopup(true);
+              localStorage.setItem("last",window.location.pathname);
+               console.log(localStorage);
           const timer = setTimeout(() => navigate("/login"), 5000);
           return () => clearTimeout(timer);
         }
@@ -337,6 +339,8 @@ const Checkout = () => {
     const userPhone = localStorage.getItem("dimensify3duserphoneNo");
     if (!userPhone) {
       toast.error('User not logged in!');
+          localStorage.setItem("last",window.location.pathname);
+          console.log(localStorage);
       navigate("/login");
       return;
     }

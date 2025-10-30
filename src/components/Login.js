@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Phone, Lock, Printer, Shield, CheckCircle } from 'lucide-react';
 import API_BASE_URL from './apiConfig';
+import { useNavigate } from 'react-router-dom';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({
@@ -11,7 +12,7 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
-
+  const navigate= useNavigate();
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -94,11 +95,14 @@ const LoginPage = () => {
       // Store phone number in localStorage
       localStorage.setItem("dimensify3duserphoneNo", user.phone);
 
-      // Navigate back after 3 seconds
-      setTimeout(() => {
-        window.history.back();
-      }, 1000);
-      
+      // // Navigate back after 3 seconds
+      // setTimeout(() => {
+      //   window.history.back();
+      // }, 1000);
+      const redirect=localStorage.getItem("last");
+      navigate(redirect);
+
+
     } catch (error) {
       console.error('Login error:', error);
       alert('Login failed. Please try again or contact support.');
