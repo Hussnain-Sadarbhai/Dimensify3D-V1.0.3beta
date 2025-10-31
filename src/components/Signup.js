@@ -203,7 +203,7 @@ const SignupPage = () => {
             if (response.ok && data.success) {
                 toast.success('Account created successfully! Please login to continue.', {
                     position: "top-right",
-                    autoClose: 7000,
+                    autoClose: 2000,
                     hideProgressBar: false,
                     closeOnClick: true,
                     pauseOnHover: true,
@@ -223,7 +223,7 @@ const SignupPage = () => {
                 
                 // Optional: Redirect to login page after a delay
                 setTimeout(() => {
-                    // window.location.href = '/login';
+                   window.location.href = '/login';
                 }, 2000);
                 
             } else {

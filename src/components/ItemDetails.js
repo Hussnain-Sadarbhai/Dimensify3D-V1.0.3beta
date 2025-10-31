@@ -40,6 +40,45 @@ export default function ItemDetails() {
     specialInstructions: "",
     cost: 0
   });
+const [couponCode, setCouponCode] = useState('');
+const [discount, setDiscount] = useState(0);
+const [finalPrice, setFinalPrice] = useState(product.finalPrice);
+  useEffect(() => {
+    // Push current path to history stack
+    // Then immediately replace previous history entry with root for back button to land at "/"
+    if (location.pathname !== '/onlinestore') {
+      window.history.pushState(null, '', location.pathname);
+      window.history.replaceState(null, '', '/onlinestore');
+    }
+  }, [location.pathname]);
+
+function handleApplyCoupon() {
+  fetch(`${API_BASE_URL}/api/coupons`)
+    .then(res => res.json())
+    .then(data => {
+      const coupon = data.data.find(c => c.name.toLowerCase() === couponCode.toLowerCase());
+      if (!coupon) {
+        toast("Invalid coupon code");
+        setDiscount(0);
+        setFinalPrice(product.finalPrice);
+        
+        return;
+      }
+      if (Date.now() > coupon.expiry) {
+        toast("Coupon expired");
+        setDiscount(0);
+        setFinalPrice(product.finalPrice);
+        return;
+      }
+      const discountPercent = coupon.discount;
+      setDiscount(discountPercent);
+      // Calculate the discounted price
+      const discountedPrice = product.finalPrice - (product.finalPrice * discountPercent / 100);
+      setFinalPrice(discountedPrice);
+      toast(`Coupon applied! Discount: ${discountPercent}%`);
+    });
+}
+
 
   // Generate random review data once when component mounts
   const [reviewData] = useState(() => {
@@ -186,7 +225,7 @@ export default function ItemDetails() {
       id: product.id,
       name: product.modelName,
       description: product.description,
-      price: isCustomizable ? customization.cost : (product.finalPrice || product.price || 0),
+      price: isCustomizable ? customization.cost : (finalPrice || product.price || 0),
       originalPrice: product.price || 0,
       image: product.images?.[0] || 'https://via.placeholder.com/150',
       quantity: 1,
@@ -211,7 +250,7 @@ export default function ItemDetails() {
   };
 
   const handleBackClick = () => {
-    navigate(-1);
+    navigate("/onlinestore");
   };
 
   // Render stars for rating
@@ -1379,19 +1418,75 @@ export default function ItemDetails() {
                     <div className="price-section">
                       <div className="price-label">Price Details</div>
                       <div className="price-display">
-                        <span className="final-price">₹{product.finalPrice}</span>
+<span className="final-price">₹{finalPrice}</span>
                         {product.off > 0 && (
-                          <span className="original-price">₹{product.price}</span>
+                          <span className="original-price">₹{product.price }</span>
                         )}
                       </div>
                       {product.off > 0 && (
                         <div className="savings-badge">
                           <CheckCircle size={16} />
-                          Save ₹{product.price - product.finalPrice} ({product.off}% OFF)
+                      Save ₹{(product.price - finalPrice).toFixed(1)} ({Number(product.off) + Number(discount)}% OFF)
+
                         </div>
                       )}
                     </div>
                   )}
+<div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+  <input
+    type="text"
+    placeholder="Enter coupon code"
+    value={couponCode}
+    onChange={(e) => setCouponCode(e.target.value)}
+    style={{
+      padding: '10px 15px',
+      fontSize: '1rem',
+      borderRadius: '25px',
+      border: '1.5px solid #764ba2',
+      outline: 'none',
+      transition: 'border-color 0.3s ease',
+      flexGrow: 1,
+    }}
+    onFocus={(e) => (e.currentTarget.style.borderColor = '#667eea')}
+    onBlur={(e) => (e.currentTarget.style.borderColor = '#764ba2')}
+  />
+  <button
+    onClick={handleApplyCoupon}
+    style={{
+      background: 'linear-gradient(90deg, #667eea, #764ba2)',
+      color: 'white',
+      padding: '10px 20px',
+      fontSize: '1rem',
+      fontWeight: '600',
+      border: 'none',
+      borderRadius: '25px',
+      cursor: 'pointer',
+      boxShadow: '0 4px 15px rgba(118, 75, 162, 0.3)',
+      transition: 'background 0.4s ease, transform 0.2s ease, boxShadow 0.3s ease',
+    }}
+    onMouseEnter={e => {
+      e.currentTarget.style.background = 'linear-gradient(90deg, #764ba2, #667eea)';
+      e.currentTarget.style.transform = 'scale(1.05)';
+      e.currentTarget.style.boxShadow = '0 8px 20px rgba(118, 75, 162, 0.5)';
+    }}
+    onMouseLeave={e => {
+      e.currentTarget.style.background = 'linear-gradient(90deg, #667eea, #764ba2)';
+      e.currentTarget.style.transform = 'scale(1)';
+      e.currentTarget.style.boxShadow = '0 4px 15px rgba(118, 75, 162, 0.3)';
+    }}
+    onMouseDown={e => {
+      e.currentTarget.style.transform = 'scale(0.98)';
+      e.currentTarget.style.boxShadow = '0 2px 10px rgba(118, 75, 162, 0.2)';
+    }}
+    onMouseUp={e => {
+      e.currentTarget.style.transform = 'scale(1.05)';
+      e.currentTarget.style.boxShadow = '0 8px 20px rgba(118, 75, 162, 0.5)';
+    }}
+  >
+    Apply Coupon
+  </button>
+</div>
+
 
                   <div className="action-buttons">
                     <button 

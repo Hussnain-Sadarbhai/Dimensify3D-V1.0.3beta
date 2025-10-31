@@ -636,7 +636,7 @@ const HelpSection = () => {
         </div>
       </div>
 
-     
+      <ToastContainer />
     </div>
   );
 };

@@ -17,9 +17,9 @@ export default function Cart() {
     useEffect(() => {
       // Push current path to history stack
       // Then immediately replace previous history entry with root for back button to land at "/"
-      if (location.pathname !== '/') {
+      if (location.pathname !== '/onlinestore') {
         window.history.pushState(null, '', location.pathname);
-        window.history.replaceState(null, '', '/');
+        window.history.replaceState(null, '', '/onlinestore');
       }
     }, [location.pathname]);
 
