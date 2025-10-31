@@ -3,7 +3,7 @@ import { Search, Package, Tag, ChevronLeft, ChevronRight, ShoppingCart, Zap, Arr
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import API_BASE_URL from "./apiConfig";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from "react-router-dom";
 
 export default function ProductStore() {
   const [products, setProducts] = useState([]);
@@ -17,8 +17,13 @@ export default function ProductStore() {
   const [showLoginPopup, setShowLoginPopup] = useState(false);
   const [addingToCart, setAddingToCart] = useState({});
 
+ const location= useLocation();
   const navigate = useNavigate();
+
   
+
+  
+
   useEffect(() => {
     fetchProducts();
   }, []);
@@ -208,7 +213,7 @@ export default function ProductStore() {
 
   const handleLoginRedirect = () => {
     setShowLoginPopup(false);
-    localStorage.setItem("last",window.location.pathname);
+    localStorage.setItem("last","/onlinestore");
     console.log(localStorage);
     window.location.href = "/login";
   };
@@ -220,7 +225,15 @@ export default function ProductStore() {
   const handleCartClick = () => {
     window.location.href = "/cart";
   };
-
+  
+    useEffect(() => {
+      // Push current path to history stack
+      // Then immediately replace previous history entry with root for back button to land at "/"
+      if (location.pathname !== '/') {
+        window.history.pushState(null, '', location.pathname);
+        window.history.replaceState(null, '', '/');
+      }
+    }, [location.pathname]);
   return (
     <>
       <style>{`

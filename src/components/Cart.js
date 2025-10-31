@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Badge, Spinner, Alert, Modal, Form } from 'react-bootstrap';
 import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, Package, CheckSquare, Square, X, ZoomIn } from 'lucide-react';
 import API_BASE_URL from './apiConfig';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate ,useLocation} from 'react-router-dom';
 
 export default function Cart() {
   const [cartItems, setCartItems] = useState([]);
@@ -12,8 +12,16 @@ export default function Cart() {
   const [showLoginPopup, setShowLoginPopup] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState(null);
   const [deletingItemId, setDeletingItemId] = useState(null);
-
+ const location=useLocation();
   const navigate = useNavigate()
+    useEffect(() => {
+      // Push current path to history stack
+      // Then immediately replace previous history entry with root for back button to land at "/"
+      if (location.pathname !== '/') {
+        window.history.pushState(null, '', location.pathname);
+        window.history.replaceState(null, '', '/');
+      }
+    }, [location.pathname]);
 
   useEffect(() => {
     fetchUserCart();
@@ -71,7 +79,7 @@ export default function Cart() {
   };
 
   const handleLoginRedirect = () => {
-    localStorage.setItem("last",window.location.pathname);
+    localStorage.setItem("last","/cart");
     console.log(localStorage);
     window.location.href = '/login';
   };
