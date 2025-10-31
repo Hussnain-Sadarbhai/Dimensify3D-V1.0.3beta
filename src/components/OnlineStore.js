@@ -214,7 +214,6 @@ export default function ProductStore() {
   };
 
   const handleBackClick = () => {
-    // window.history.back();
     navigate('/');
   };
 

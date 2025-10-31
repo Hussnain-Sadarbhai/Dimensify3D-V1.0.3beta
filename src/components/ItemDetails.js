@@ -27,10 +27,8 @@ export default function ItemDetails() {
 }, []);
   const location = useLocation();
   const navigate = useNavigate();
-  const item=localStorage.getItem("product");
-const { product } = location.state || { product: item };
+  const { product } = location.state || {};
 
-  console.log(product);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showLoginPopup, setShowLoginPopup] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
@@ -208,8 +206,7 @@ const { product } = location.state || { product: item };
   const handleLoginRedirect = () => {
     setShowLoginPopup(false);
     localStorage.setItem("last","/onlinestore");
-    localStorage.setItem("product",product);
-    console.log(localStorage)
+    console.log(localStorage);
     navigate("/login");
   };
 

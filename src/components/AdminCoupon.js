@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import API_BASE_URL from "./apiConfig";
-import { Form, Button, Card, Container } from "react-bootstrap";
+import { Form, Button, Card, Container, Table, Spinner } from "react-bootstrap";
 
 export default function AdminCoupon() {
   const [coupon, setCoupon] = useState({
@@ -12,6 +12,8 @@ export default function AdminCoupon() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [couponsList, setCouponsList] = useState([]); // ✅ new state for coupons
+  const [fetching, setFetching] = useState(false); // ✅ loading for table
 
   const handleChange = (e) => {
     let { name, value, type, checked } = e.target;
@@ -43,6 +45,7 @@ export default function AdminCoupon() {
           limit: "",
           public: true,
         });
+        fetchCoupons(); // ✅ refresh table after new coupon
       } else {
         alert("Failed: " + result.message);
       }
@@ -53,6 +56,29 @@ export default function AdminCoupon() {
       setLoading(false);
     }
   };
+
+  // ✅ New function to fetch all coupons
+  const fetchCoupons = async () => {
+    setFetching(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/coupons`);
+      const result = await response.json();
+      if (result.success && Array.isArray(result.data)) {
+        setCouponsList(result.data);
+      } else {
+        console.error("Failed to fetch coupons:", result.message);
+      }
+    } catch (error) {
+      console.error("Error fetching coupons:", error);
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  // ✅ Fetch on page load
+  useEffect(() => {
+    fetchCoupons();
+  }, []);
 
   return (
     <>
@@ -82,7 +108,7 @@ export default function AdminCoupon() {
           Admin Coupon Management
         </div>
 
-        <Card className="coupon-card">
+        <Card className="coupon-card mb-5">
           <Form>
             <Form.Group className="mb-3">
               <Form.Label>Coupon Name</Form.Label>
@@ -146,6 +172,49 @@ export default function AdminCoupon() {
               {loading ? "Generating..." : "Generate Coupon"}
             </Button>
           </Form>
+        </Card>
+
+        {/* ✅ Coupons List Table */}
+        <Card className="coupon-card">
+          <h5 className="mb-3 text-center">All Coupons</h5>
+          {fetching ? (
+            <div className="text-center py-3">
+              <Spinner animation="border" />
+            </div>
+          ) : (
+            <Table striped bordered hover responsive>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Coupon Name</th>
+                  <th>Discount (%)</th>
+                  <th>Expiry</th>
+                  <th>Limit</th>
+                  <th>Public</th>
+                </tr>
+              </thead>
+              <tbody>
+                {couponsList.length > 0 ? (
+                  couponsList.map((c, index) => (
+                    <tr key={index}>
+                      <td>{index + 1}</td>
+                      <td>{c.name}</td>
+                      <td>{c.discount}</td>
+                      <td>{new Date(c.expiry).toLocaleDateString()}</td>
+                      <td>{c.limit}</td>
+                      <td>{c.public ? "Yes" : "No"}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="text-center text-muted">
+                      No coupons found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          )}
         </Card>
       </Container>
     </>
