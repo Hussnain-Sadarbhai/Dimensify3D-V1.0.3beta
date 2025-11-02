@@ -1432,7 +1432,7 @@ function handleApplyCoupon() {
                       )}
                     </div>
                   )}
-<div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+{/* <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
   <input
     type="text"
     placeholder="Enter coupon code"
@@ -1485,7 +1485,7 @@ function handleApplyCoupon() {
   >
     Apply Coupon
   </button>
-</div>
+</div> */}
 
 
                   <div className="action-buttons">

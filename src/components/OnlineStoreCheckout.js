@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import "./onlinestorecheckout.css"
 import {
   Container,
   Row,
@@ -17,6 +18,20 @@ import {
 import API_BASE_URL from "./apiConfig";
 
 const OnlineStoreCheckout = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handlePopState = () => {
+      // Navigate to the recent page or a default page
+      navigate("/recent-page-path", { replace: true });
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [navigate]);
+
   const [checkoutData, setCheckoutData] = useState(null);
   const [showLoginPopup, setShowLoginPopup] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
@@ -34,7 +49,7 @@ const OnlineStoreCheckout = () => {
   });
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [loading, setLoading] = useState(true);
-  
+
   // Address editing states
   const [editingAddressKey, setEditingAddressKey] = useState(null);
   const [editAddressForm, setEditAddressForm] = useState({
@@ -45,14 +60,71 @@ const OnlineStoreCheckout = () => {
     city: "",
     state: "",
   });
-  
+
   // Customization states
   const [customizations, setCustomizations] = useState({});
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [currentCustomizingItem, setCurrentCustomizingItem] = useState(null);
-  const [tempCustomization, setTempCustomization] = useState({ bigText: "", mediumText: "", smallText: "", specialInstructions: "" });
-  
-  const navigate = useNavigate();
+  const [tempCustomization, setTempCustomization] = useState({
+    bigText: "",
+    mediumText: "",
+    smallText: "",
+    specialInstructions: "",
+  });
+  const [couponCode, setCouponCode] = useState("");
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [finalPrice, setFinalPrice] = useState(
+    checkoutData ? checkoutData.totalPrice : 0
+  );
+
+  function handleApplyCoupon() {
+    fetch(`${API_BASE_URL}/api/coupons`)
+      .then((res) => res.json())
+      .then((data) => {
+        const coupon = data.data.find(
+          (c) => c.name.toLowerCase() === couponCode.toLowerCase()
+        );
+        if (!coupon) {
+          toast.error("Invalid coupon code");
+          setDiscountPercent(0);
+          setDiscountAmount(0);
+          setFinalPrice(checkoutData.totalPrice);
+          return;
+        }
+        if (Date.now() > coupon.expiry) {
+          toast.error("Coupon expired");
+          setDiscountPercent(0);
+          setDiscountAmount(0);
+          setFinalPrice(checkoutData.totalPrice);
+          return;
+        }
+        const discount = coupon.discount; // percent discount
+        setDiscountPercent(discount);
+        const discountAmt = (checkoutData.totalPrice * discount) / 100;
+        setDiscountAmount(discountAmt);
+        setFinalPrice(checkoutData.totalPrice - discountAmt);
+
+        toast.success(`Coupon applied! Discount: ${discount}%`);
+      })
+      .catch(() => {
+        toast.error("Failed to apply coupon");
+        setDiscountPercent(0);
+        setDiscountAmount(0);
+        setFinalPrice(checkoutData.totalPrice);
+      });
+  }
+
+  useEffect(() => {
+    if (discountPercent > 0 && checkoutData) {
+      const discountAmt = (checkoutData.totalPrice * discountPercent) / 100;
+      setDiscountAmount(discountAmt);
+      setFinalPrice(checkoutData.totalPrice - discountAmt);
+    } else if (checkoutData) {
+      setFinalPrice(checkoutData.totalPrice);
+    }
+  }, [checkoutData, discountPercent]);
+
   const location = useLocation();
 
   useEffect(() => {
@@ -63,6 +135,66 @@ const OnlineStoreCheckout = () => {
       document.body.style.background = "";
     };
   }, []);
+  const updateQuantity = async (itemId, newQuantity) => {
+    const userPhone = localStorage.getItem("dimensify3duserphoneNo");
+    if (!userPhone) {
+      toast.error("User not logged in!");
+      return;
+    }
+
+    let updatedItems;
+    if (newQuantity < 1) {
+      // 1. Remove item in frontend state
+      updatedItems = checkoutData.items.filter((item) => item.id !== itemId);
+
+      // 2. Also call backend to delete item from DB cart
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/remove-from-cart`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: userPhone, cartItemId: itemId }),
+        });
+        const data = await response.json();
+        if (data.success) {
+        }
+      } catch (error) {
+        console.error("Error removing cart item:", error);
+        toast.error("Error removing item from server.");
+      }
+    } else {
+      // Update quantity normally
+      updatedItems = checkoutData.items.map((item) => {
+        if (item.id === itemId) {
+          return { ...item, quantity: newQuantity };
+        }
+        return item;
+      });
+    }
+
+    // Recalculate subtotal, savings, totalQuantity etc.
+    const subtotal = updatedItems.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0
+    );
+    const savings = updatedItems.reduce(
+      (total, item) =>
+        total + (item.originalPrice - item.price) * item.quantity,
+      0
+    );
+    const totalQuantity = updatedItems.reduce(
+      (sum, item) => sum + item.quantity,
+      0
+    );
+
+    setCheckoutData((prev) => ({
+      ...prev,
+      items: updatedItems,
+      subtotal,
+      savings,
+      totalQuantity,
+      totalPrice: subtotal,
+    }));
+  };
 
   useEffect(() => {
     const loadCheckoutData = async () => {
@@ -70,8 +202,8 @@ const OnlineStoreCheckout = () => {
         const userPhone = localStorage.getItem("dimensify3duserphoneNo");
         if (!userPhone) {
           setShowLoginPopup(true);
-              localStorage.setItem("last",window.location.pathname);
-               console.log(localStorage);
+          localStorage.setItem("last", window.location.pathname);
+          console.log(localStorage);
           const timer = setTimeout(() => navigate("/login"), 5000);
           return () => clearTimeout(timer);
         }
@@ -84,25 +216,33 @@ const OnlineStoreCheckout = () => {
         const data = await res.json();
         if (data.success) {
           setUser(data.data);
-          const userAddresses = data.data.addresses ? Object.entries(data.data.addresses) : [];
+          const userAddresses = data.data.addresses
+            ? Object.entries(data.data.addresses)
+            : [];
           setAddresses(userAddresses);
-          
+
           if (userAddresses.length === 1) {
             setSelectedAddressKey(userAddresses[0][0]);
           }
         }
 
         const cartItems = location.state?.cartItems;
-        
+
         if (!cartItems || cartItems.length === 0) {
           toast.error("No items found for checkout. Redirecting...");
           setTimeout(() => navigate("/cart"), 2000);
           return;
         }
 
-        const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-        const savings = cartItems.reduce((total, item) => 
-          total + ((item.originalPrice - item.price) * item.quantity), 0);
+        const subtotal = cartItems.reduce(
+          (total, item) => total + item.price * item.quantity,
+          0
+        );
+        const savings = cartItems.reduce(
+          (total, item) =>
+            total + (item.originalPrice - item.price) * item.quantity,
+          0
+        );
 
         const checkoutInfo = {
           items: cartItems,
@@ -110,28 +250,30 @@ const OnlineStoreCheckout = () => {
           savings: savings,
           totalPrice: subtotal,
           itemCount: cartItems.length,
-          totalQuantity: cartItems.reduce((sum, item) => sum + item.quantity, 0)
+          totalQuantity: cartItems.reduce(
+            (sum, item) => sum + item.quantity,
+            0
+          ),
         };
 
         setCheckoutData(checkoutInfo);
-        
+
         // Initialize customizations for items with price 0
         const initialCustomizations = {};
-        cartItems.forEach(item => {
+        cartItems.forEach((item) => {
           if (item.price === 0) {
             initialCustomizations[item.id] = {
               bigText: "",
               mediumText: "",
               smallText: "",
               specialInstructions: "",
-              cost: 0
+              cost: 0,
             };
           }
         });
         setCustomizations(initialCustomizations);
-        
-        setLoading(false);
 
+        setLoading(false);
       } catch (error) {
         console.error("Error loading checkout data:", error);
         toast.error("Failed to load checkout data");
@@ -146,62 +288,91 @@ const OnlineStoreCheckout = () => {
   // Address Management Functions
   const handleAddAddress = async () => {
     if (addresses.length >= 3) {
-      toast.error('You can add only up to 3 addresses.');
+      toast.error("You can add only up to 3 addresses.");
       return;
     }
-    if (!newAddress.addressLine1 || !newAddress.pincode || !newAddress.city || !newAddress.state) {
-      toast.error('Please fill all required fields.');
+    if (
+      !newAddress.addressLine1 ||
+      !newAddress.pincode ||
+      !newAddress.city ||
+      !newAddress.state
+    ) {
+      toast.error("Please fill all required fields.");
       return;
     }
 
     const userPhone = localStorage.getItem("dimensify3duserphoneNo");
     if (!userPhone) {
-      toast.error('User not logged in!');
-          localStorage.setItem("last",window.location.pathname);
-           console.log(localStorage);
+      toast.error("User not logged in!");
+      localStorage.setItem("last", window.location.pathname);
+      console.log(localStorage);
       navigate("/login");
       return;
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/users/${userPhone}/address`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: user?.name || "",
-          street: newAddress.addressLine1,
-          addressLine2: newAddress.addressLine2,
-          landmark: newAddress.landmark,
-          city: newAddress.city,
-          state: newAddress.state,
-          pincode: newAddress.pincode,
-        }),
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/api/users/${userPhone}/address`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: user?.name || "",
+            street: newAddress.addressLine1,
+            addressLine2: newAddress.addressLine2,
+            landmark: newAddress.landmark,
+            city: newAddress.city,
+            state: newAddress.state,
+            pincode: newAddress.pincode,
+          }),
+        }
+      );
 
       const data = await res.json();
       if (data.success) {
-        const updatedAddresses = [...addresses, [data.addressKey || Date.now(), newAddress]];
+        const updatedAddresses = [
+          ...addresses,
+          [data.addressKey || Date.now(), newAddress],
+        ];
         setAddresses(updatedAddresses);
         setSelectedAddressKey(updatedAddresses[updatedAddresses.length - 1][0]);
-        setNewAddress({ addressLine1: "", addressLine2: "", landmark: "", pincode: "", city: "", state: "" });
+        setNewAddress({
+          addressLine1: "",
+          addressLine2: "",
+          landmark: "",
+          pincode: "",
+          city: "",
+          state: "",
+        });
         setShowAddressForm(false);
-        toast.success('Address saved successfully!');
+        toast.success("Address saved successfully!");
       } else {
-        toast.error(data.message || 'Failed to save address');
+        toast.error(data.message || "Failed to save address");
       }
     } catch (err) {
       console.error("Error saving address:", err);
-      toast.error('Error saving address. Please try again.');
+      toast.error("Error saving address. Please try again.");
     }
   };
+
+
+
+function NoItemsRedirect() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+   
+    navigate('/onlinestore');
+  }, [navigate]);
+}
 
   const handleEditAddress = async (addressKey, updatedAddress) => {
     try {
       const userPhone = localStorage.getItem("dimensify3duserphoneNo");
       if (!userPhone) {
-        toast.error('User not logged in!');
-            localStorage.setItem("last",window.location.pathname);
-            console.log(localStorage);
+        toast.error("User not logged in!");
+        localStorage.setItem("last", window.location.pathname);
+        console.log(localStorage);
         navigate("/login");
         return;
       }
@@ -211,27 +382,27 @@ const OnlineStoreCheckout = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           addresses: {
-            [addressKey]: updatedAddress
-          }
+            [addressKey]: updatedAddress,
+          },
         }),
       });
 
       const data = await res.json();
       if (data.success) {
         // Update local state
-        const updatedAddresses = addresses.map(([key, addr]) => 
+        const updatedAddresses = addresses.map(([key, addr]) =>
           key === addressKey ? [key, updatedAddress] : [key, addr]
         );
         setAddresses(updatedAddresses);
-        toast.success('Address updated successfully!');
+        toast.success("Address updated successfully!");
         return true;
       } else {
-        toast.error(data.message || 'Failed to update address');
+        toast.error(data.message || "Failed to update address");
         return false;
       }
     } catch (err) {
       console.error("Error updating address:", err);
-      toast.error('Error updating address. Please try again.');
+      toast.error("Error updating address. Please try again.");
       return false;
     }
   };
@@ -240,7 +411,7 @@ const OnlineStoreCheckout = () => {
     try {
       const userPhone = localStorage.getItem("dimensify3duserphoneNo");
       if (!userPhone) {
-        toast.error('User not logged in!');
+        toast.error("User not logged in!");
         return;
       }
 
@@ -256,28 +427,32 @@ const OnlineStoreCheckout = () => {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          addresses: updatedAddresses
+          addresses: updatedAddresses,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
         // Update local state
-        const filteredAddresses = addresses.filter(([key]) => key !== addressKey);
+        const filteredAddresses = addresses.filter(
+          ([key]) => key !== addressKey
+        );
         setAddresses(filteredAddresses);
-        
+
         // Reset selected address if it was deleted
         if (selectedAddressKey === addressKey) {
-          setSelectedAddressKey(filteredAddresses.length > 0 ? filteredAddresses[0][0] : null);
+          setSelectedAddressKey(
+            filteredAddresses.length > 0 ? filteredAddresses[0][0] : null
+          );
         }
-        
-        toast.success('Address deleted successfully!');
+
+        toast.success("Address deleted successfully!");
       } else {
-        toast.error(data.message || 'Failed to delete address');
+        toast.error(data.message || "Failed to delete address");
       }
     } catch (err) {
       console.error("Error deleting address:", err);
-      toast.error('Error deleting address. Please try again.');
+      toast.error("Error deleting address. Please try again.");
     }
   };
 
@@ -306,8 +481,13 @@ const OnlineStoreCheckout = () => {
   };
 
   const saveEditedAddress = async () => {
-    if (!editAddressForm.addressLine1 || !editAddressForm.pincode || !editAddressForm.city || !editAddressForm.state) {
-      toast.error('Please fill all required fields.');
+    if (
+      !editAddressForm.addressLine1 ||
+      !editAddressForm.pincode ||
+      !editAddressForm.city ||
+      !editAddressForm.state
+    ) {
+      toast.error("Please fill all required fields.");
       return;
     }
 
@@ -319,9 +499,9 @@ const OnlineStoreCheckout = () => {
 
   // Customization Functions
   const calculateCustomizationCost = (bigText, mediumText, smallText) => {
-    const bigTextCost = bigText.replace(/\s/g, '').length * 10;
-    const mediumTextCost = mediumText.replace(/\s/g, '').length * 8;
-    const smallTextCost = smallText.replace(/\s/g, '').length * 5;
+    const bigTextCost = bigText.replace(/\s/g, "").length * 10;
+    const mediumTextCost = mediumText.replace(/\s/g, "").length * 8;
+    const smallTextCost = smallText.replace(/\s/g, "").length * 5;
     return bigTextCost + mediumTextCost + smallTextCost;
   };
 
@@ -337,17 +517,21 @@ const OnlineStoreCheckout = () => {
   const getTotalCustomizationCost = () => {
     return checkoutData.items.reduce((total, item) => {
       if (item.price === 0 && customizations[item.id]) {
-        return total + (customizations[item.id].cost * item.quantity);
+        return total + customizations[item.id].cost * item.quantity;
       }
       return total;
     }, 0);
   };
 
   const hasUncompletedCustomizations = () => {
-    return checkoutData.items.some(item => {
+    return checkoutData.items.some((item) => {
       if (item.price === 0) {
         const customization = customizations[item.id];
-        return !customization || !customization.mediumText || customization.mediumText.trim().length === 0;
+        return (
+          !customization ||
+          !customization.mediumText ||
+          customization.mediumText.trim().length === 0
+        );
       }
       return false;
     });
@@ -367,31 +551,38 @@ const OnlineStoreCheckout = () => {
   const handlePayNow = async () => {
     try {
       if (hasUncompletedCustomizations()) {
-        toast.error("Please complete customization for all customizable items before proceeding to payment.");
+        toast.error(
+          "Please complete customization for all customizable items before proceeding to payment."
+        );
         return;
       }
 
       const res = await loadRazorpay();
       if (!res) {
-        toast.error('Failed to load Razorpay SDK. Check your internet connection.');
+        toast.error(
+          "Failed to load Razorpay SDK. Check your internet connection."
+        );
         return;
       }
 
       const userPhone = localStorage.getItem("dimensify3duserphoneNo");
       if (!userPhone) {
-        toast.error('Please login first!');
+        toast.error("Please login first!");
         return;
       }
 
-      const selectedAddr = addresses.find(([key]) => key === selectedAddressKey);
+      const selectedAddr = addresses.find(
+        ([key]) => key === selectedAddressKey
+      );
       if (!selectedAddr) {
-        toast.error('Please select a delivery address.');
+        toast.error("Please select a delivery address.");
         return;
       }
 
-      const deliveryCharge = 40;
+      const deliveryCharge = checkoutData.items.length === 0 ? 0 : 40;
       const customizationCost = getTotalCustomizationCost();
-      const grandTotal = checkoutData.totalPrice + deliveryCharge + customizationCost;
+      const grandTotal =
+        checkoutData.totalPrice + deliveryCharge + customizationCost;
 
       const orderRes = await fetch(`${API_BASE_URL}/api/createOrder`, {
         method: "POST",
@@ -405,7 +596,7 @@ const OnlineStoreCheckout = () => {
 
       const orderDataRes = await orderRes.json();
       if (!orderDataRes.success) {
-        toast.error('Failed to create payment order');
+        toast.error("Failed to create payment order");
         return;
       }
 
@@ -445,7 +636,7 @@ const OnlineStoreCheckout = () => {
                 savings: checkoutData.savings,
                 deliveryCharge: deliveryCharge,
                 customizationCost: customizationCost,
-                items: checkoutData.items.map(item => {
+                items: checkoutData.items.map((item) => {
                   const itemData = {
                     id: item.id,
                     name: item.name,
@@ -456,7 +647,7 @@ const OnlineStoreCheckout = () => {
                     image: item.image,
                     category: item.category,
                     off: item.off,
-                    totalItemPrice: item.price * item.quantity
+                    totalItemPrice: item.price * item.quantity,
                   };
 
                   if (item.price === 0 && customizations[item.id]) {
@@ -464,37 +655,43 @@ const OnlineStoreCheckout = () => {
                       bigText: customizations[item.id].bigText,
                       mediumText: customizations[item.id].mediumText,
                       smallText: customizations[item.id].smallText,
-                      specialInstructions: customizations[item.id].specialInstructions,
+                      specialInstructions:
+                        customizations[item.id].specialInstructions,
                       bigTextChars: customizations[item.id].bigTextChars,
                       mediumTextChars: customizations[item.id].mediumTextChars,
                       smallTextChars: customizations[item.id].smallTextChars,
                       customizationCostPerItem: customizations[item.id].cost,
-                      totalCustomizationCost: customizations[item.id].cost * item.quantity
+                      totalCustomizationCost:
+                        customizations[item.id].cost * item.quantity,
                     };
-                    itemData.totalItemPrice = customizations[item.id].cost * item.quantity;
+                    itemData.totalItemPrice =
+                      customizations[item.id].cost * item.quantity;
                   }
 
                   return itemData;
                 }),
                 itemCount: checkoutData.itemCount,
-                totalQuantity: checkoutData.totalQuantity
+                totalQuantity: checkoutData.totalQuantity,
               };
 
-              const orderStoreRes = await fetch(`${API_BASE_URL}/api/store-orders`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(orderData),
-              });
+              const orderStoreRes = await fetch(
+                `${API_BASE_URL}/api/store-orders`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(orderData),
+                }
+              );
 
               const orderStoreData = await orderStoreRes.json();
               if (orderStoreData.success) {
                 for (const item of checkoutData.items) {
                   await fetch(`${API_BASE_URL}/api/remove-from-cart`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
                       phone: userPhone,
-                      cartItemId: item.id 
+                      cartItemId: item.id,
                     }),
                   });
                 }
@@ -507,18 +704,18 @@ const OnlineStoreCheckout = () => {
               } else {
                 setIsProcessingOrder(false);
                 setShowPaymentSuccessModal(false);
-                toast.error(orderStoreData.message || 'Failed to store order');
+                toast.error(orderStoreData.message || "Failed to store order");
               }
             } else {
               setIsProcessingOrder(false);
               setShowPaymentSuccessModal(false);
-              toast.error('Payment verification failed!');
+              toast.error("Payment verification failed!");
             }
           } catch (err) {
             console.error("Error processing order:", err);
             setIsProcessingOrder(false);
             setShowPaymentSuccessModal(false);
-            toast.error('Something went wrong. Please contact support.');
+            toast.error("Something went wrong. Please contact support.");
           }
         },
         prefill: {
@@ -533,21 +730,40 @@ const OnlineStoreCheckout = () => {
       rzp1.open();
     } catch (err) {
       console.error("Error in checkout:", err);
-      toast.error('Something went wrong. Please try again!');
+      toast.error("Something went wrong. Please try again!");
     }
   };
 
   // Modal Components
   const PaymentSuccessModal = () => (
-    <Modal show={showPaymentSuccessModal} centered backdrop="static" keyboard={false} size="md">
-      <Modal.Body className="text-center py-5" style={{ background: "linear-gradient(135deg, #28a745 0%, #20c997 100%)", color: "white", borderRadius: "0.5rem" }}>
+    <Modal
+      show={showPaymentSuccessModal}
+      centered
+      backdrop="static"
+      keyboard={false}
+      size="md"
+    >
+      <Modal.Body
+        className="text-center py-5"
+        style={{
+          background: "linear-gradient(135deg, #28a745 0%, #20c997 100%)",
+          color: "white",
+          borderRadius: "0.5rem",
+        }}
+      >
         {isProcessingOrder ? (
           <>
             <div className="mb-4">
-              <Spinner animation="border" size="lg" style={{ color: "white" }} />
+              <Spinner
+                animation="border"
+                size="lg"
+                style={{ color: "white" }}
+              />
             </div>
             <h4 className="mb-3">Processing Your Order...</h4>
-            <p className="mb-4">Payment successful! We're saving your order details.</p>
+            <p className="mb-4">
+              Payment successful! We're saving your order details.
+            </p>
             <div className="d-flex align-items-center justify-content-center">
               <Spinner animation="grow" size="sm" className="me-2" />
               <small>Please wait...</small>
@@ -557,7 +773,10 @@ const OnlineStoreCheckout = () => {
         ) : (
           <>
             <div className="mb-4">
-              <i className="fas fa-check-circle" style={{ fontSize: "4rem" }}></i>
+              <i
+                className="fas fa-check-circle"
+                style={{ fontSize: "4rem" }}
+              ></i>
             </div>
             <h4 className="mb-3">Order Confirmed!</h4>
             <p className="mb-4">Your order has been placed successfully.</p>
@@ -572,24 +791,33 @@ const OnlineStoreCheckout = () => {
     const [localBigText, setLocalBigText] = useState("");
     const [localMediumText, setLocalMediumText] = useState("");
     const [localSmallText, setLocalSmallText] = useState("");
-    const [localSpecialInstructions, setLocalSpecialInstructions] = useState("");
+    const [localSpecialInstructions, setLocalSpecialInstructions] =
+      useState("");
 
     useEffect(() => {
       if (currentCustomizingItem && tempCustomization) {
         setLocalBigText(tempCustomization.bigText || "");
         setLocalMediumText(tempCustomization.mediumText || "");
         setLocalSmallText(tempCustomization.smallText || "");
-        setLocalSpecialInstructions(tempCustomization.specialInstructions || "");
+        setLocalSpecialInstructions(
+          tempCustomization.specialInstructions || ""
+        );
       }
     }, [currentCustomizingItem, tempCustomization]);
 
     const handleSave = () => {
       if (!localMediumText || localMediumText.trim().length === 0) {
-        toast.error("Medium text is mandatory. Please enter at least one character.");
+        toast.error(
+          "Medium text is mandatory. Please enter at least one character."
+        );
         return;
       }
 
-      const cost = calculateCustomizationCost(localBigText, localMediumText, localSmallText);
+      const cost = calculateCustomizationCost(
+        localBigText,
+        localMediumText,
+        localSmallText
+      );
 
       const savedCustomization = {
         bigText: localBigText,
@@ -597,14 +825,14 @@ const OnlineStoreCheckout = () => {
         smallText: localSmallText,
         specialInstructions: localSpecialInstructions,
         cost: cost,
-        bigTextChars: localBigText.replace(/\s/g, '').length,
-        mediumTextChars: localMediumText.replace(/\s/g, '').length,
-        smallTextChars: localSmallText.replace(/\s/g, '').length
+        bigTextChars: localBigText.replace(/\s/g, "").length,
+        mediumTextChars: localMediumText.replace(/\s/g, "").length,
+        smallTextChars: localSmallText.replace(/\s/g, "").length,
       };
 
-      setCustomizations(prev => ({
+      setCustomizations((prev) => ({
         ...prev,
-        [currentCustomizingItem.id]: savedCustomization
+        [currentCustomizingItem.id]: savedCustomization,
       }));
 
       toast.success("Customization saved successfully!");
@@ -620,14 +848,21 @@ const OnlineStoreCheckout = () => {
     if (!currentCustomizingItem) return null;
 
     return (
-      <Modal 
-        show={showCustomizationModal} 
-        onHide={handleClose} 
-        centered 
+      <Modal
+        show={showCustomizationModal}
+        onHide={handleClose}
+        centered
         size="lg"
         backdrop="static"
       >
-        <Modal.Header closeButton style={{ background: "linear-gradient(316deg, rgb(42 101 197) 0%, rgb(10 80 177) 100%)", color: "#fff" }}>
+        <Modal.Header
+          closeButton
+          style={{
+            background:
+              "linear-gradient(316deg, rgb(42 101 197) 0%, rgb(10 80 177) 100%)",
+            color: "#fff",
+          }}
+        >
           <Modal.Title>
             <i className="fas fa-pencil-alt me-2"></i>
             Customize: {currentCustomizingItem.name}
@@ -636,11 +871,16 @@ const OnlineStoreCheckout = () => {
         <Modal.Body className="p-4">
           <Alert variant="info" className="mb-4">
             <i className="fas fa-info-circle me-2"></i>
-            <strong>Note:</strong> Spaces are allowed but won't be charged. Medium text is mandatory. Pricing: Big Text (₹10/char), Medium Text (₹8/char), Small Text (₹5/char)
+            <strong>Note:</strong> Spaces are allowed but won't be charged.
+            Medium text is mandatory. Pricing: Big Text (₹10/char), Medium Text
+            (₹8/char), Small Text (₹5/char)
           </Alert>
 
           <Form.Group className="mb-4">
-            <Form.Label className="fw-bold" style={{ fontSize: "1.2rem", color: "#2a65c5" }}>
+            <Form.Label
+              className="fw-bold"
+              style={{ fontSize: "1.2rem", color: "#2a65c5" }}
+            >
               <i className="fas fa-text-height me-2"></i>
               Big Text (Optional) - ₹10 per character
             </Form.Label>
@@ -654,7 +894,10 @@ const OnlineStoreCheckout = () => {
           </Form.Group>
 
           <Form.Group className="mb-4">
-            <Form.Label className="fw-bold" style={{ fontSize: "1rem", color: "#2a65c5" }}>
+            <Form.Label
+              className="fw-bold"
+              style={{ fontSize: "1rem", color: "#2a65c5" }}
+            >
               <i className="fas fa-text-width me-2"></i>
               Medium Text (Mandatory) - ₹8 per character
             </Form.Label>
@@ -669,7 +912,10 @@ const OnlineStoreCheckout = () => {
           </Form.Group>
 
           <Form.Group className="mb-4">
-            <Form.Label className="fw-bold" style={{ fontSize: "0.9rem", color: "#2a65c5" }}>
+            <Form.Label
+              className="fw-bold"
+              style={{ fontSize: "0.9rem", color: "#2a65c5" }}
+            >
               <i className="fas fa-font me-2"></i>
               Small Text (Optional) - ₹5 per character
             </Form.Label>
@@ -683,7 +929,10 @@ const OnlineStoreCheckout = () => {
           </Form.Group>
 
           <Form.Group className="mb-4">
-            <Form.Label className="fw-bold" style={{ fontSize: "0.95rem", color: "#28a745" }}>
+            <Form.Label
+              className="fw-bold"
+              style={{ fontSize: "0.95rem", color: "#28a745" }}
+            >
               <i className="fas fa-clipboard-list me-2"></i>
               Special Instructions (Optional)
             </Form.Label>
@@ -697,7 +946,8 @@ const OnlineStoreCheckout = () => {
             />
             <Form.Text className="text-muted">
               <i className="fas fa-info-circle me-1"></i>
-              Example: "Size: Medium, Color: Blue, Material: Acrylic" or "Please use bold font style"
+              Example: "Size: Medium, Color: Blue, Material: Acrylic" or "Please
+              use bold font style"
             </Form.Text>
           </Form.Group>
         </Modal.Body>
@@ -705,11 +955,15 @@ const OnlineStoreCheckout = () => {
           <Button variant="secondary" onClick={handleClose}>
             Cancel
           </Button>
-          <Button 
-            variant="primary" 
+          <Button
+            variant="primary"
             onClick={handleSave}
             disabled={!localMediumText || localMediumText.trim().length === 0}
-            style={{ background: "linear-gradient(316deg, rgb(42 101 197) 0%, rgb(10 80 177) 100%)", border: "none" }}
+            style={{
+              background:
+                "linear-gradient(316deg, rgb(42 101 197) 0%, rgb(10 80 177) 100%)",
+              border: "none",
+            }}
           >
             <i className="fas fa-save me-2"></i>
             Save Customization
@@ -992,13 +1246,21 @@ const OnlineStoreCheckout = () => {
   if (showLoginPopup) {
     return (
       <Modal show centered backdrop="static">
-        <Modal.Header style={{ background: "linear-gradient(316deg, rgb(42 101 197) 0%, rgb(10 80 177) 100%)", color: "#fff" }}>
+        <Modal.Header
+          style={{
+            background:
+              "linear-gradient(316deg, rgb(42 101 197) 0%, rgb(10 80 177) 100%)",
+            color: "#fff",
+          }}
+        >
           <Modal.Title>Authentication Required</Modal.Title>
         </Modal.Header>
         <Modal.Body className="text-center py-4">
           <h5 className="mb-3">Please login to continue</h5>
           <Spinner animation="border" size="sm" className="me-2" />
-          <Button variant="primary" onClick={() => navigate("/login")}>Go to Login</Button>
+          <Button variant="primary" onClick={() => navigate("/login")}>
+            Go to Login
+          </Button>
         </Modal.Body>
       </Modal>
     );
@@ -1029,31 +1291,46 @@ const OnlineStoreCheckout = () => {
     );
   }
 
-  const deliveryPrice = 40;
+  const deliveryPrice = checkoutData.items.length === 0 ? 0 : 40;
   const customizationCost = getTotalCustomizationCost();
-  const grandTotal = checkoutData.totalPrice + deliveryPrice + customizationCost;
+  const grandTotal =
+    checkoutData.totalPrice + deliveryPrice + customizationCost;
 
   return (
     <div className="checkout-container">
       <style>{enhancedStyles}</style>
-      
+
       <Container>
         <div className="checkout-header">
           <Row className="align-items-center">
             <Col md={8}>
               <div className="d-flex align-items-center mb-2">
-                <i className="fas fa-shopping-bag me-3" style={{ fontSize: "1.5rem" }}></i>
+                <i
+                  className="fas fa-shopping-bag me-3"
+                  style={{ fontSize: "1.5rem" }}
+                ></i>
                 <div>
                   <h2 className="mb-1">Order Summary</h2>
-                  <p className="mb-0 opacity-75">Review your order from the online store</p>
+                  <p className="mb-0 opacity-75">
+                    Review your order from the online store
+                  </p>
                 </div>
               </div>
             </Col>
             <Col md={4} className="text-md-end">
               <div className="d-flex flex-column align-items-md-end">
-                <Badge bg="light" text="dark" className="mb-2 fs-6">Total Amount</Badge>
-                <div style={{ fontSize: "2rem", fontWeight: "700" }}>₹{grandTotal}</div>
-                <small className="opacity-75">{checkoutData.itemCount} product{checkoutData.itemCount > 1 ? 's' : ''} • {checkoutData.totalQuantity} item{checkoutData.totalQuantity > 1 ? 's' : ''}</small>
+                <Badge bg="light" text="dark" className="mb-2 fs-6">
+                  Total Amount
+                </Badge>
+                <div style={{ fontSize: "2rem", fontWeight: "700" }}>
+                  ₹{grandTotal}
+                </div>
+                <small className="opacity-75">
+                  {checkoutData.itemCount} product
+                  {checkoutData.itemCount > 1 ? "s" : ""} •{" "}
+                  {checkoutData.totalQuantity} item
+                  {checkoutData.totalQuantity > 1 ? "s" : ""}
+                </small>
               </div>
             </Col>
           </Row>
@@ -1064,9 +1341,14 @@ const OnlineStoreCheckout = () => {
             <Card className="card-enhanced">
               <Card.Body className="p-4">
                 <div className="d-flex align-items-center mb-4">
-                  <i className="fas fa-map-marker-alt me-3 text-primary" style={{ fontSize: "1.5rem" }}></i>
+                  <i
+                    className="fas fa-map-marker-alt me-3 text-primary"
+                    style={{ fontSize: "1.5rem" }}
+                  ></i>
                   <h4 className="mb-0">Delivery Address</h4>
-                  <Badge bg="secondary" className="ms-auto">{addresses.length}/3</Badge>
+                  <Badge bg="secondary" className="ms-auto">
+                    {addresses.length}/3
+                  </Badge>
                 </div>
 
                 {addresses.length === 0 ? (
@@ -1079,7 +1361,9 @@ const OnlineStoreCheckout = () => {
                     {addresses.map(([key, addr]) => (
                       <div
                         key={key}
-                        className={`address-option ${selectedAddressKey === key ? 'selected' : ''}`}
+                        className={`address-option ${
+                          selectedAddressKey === key ? "selected" : ""
+                        }`}
                         onClick={() => setSelectedAddressKey(key)}
                       >
                         <div className="address-actions">
@@ -1100,7 +1384,11 @@ const OnlineStoreCheckout = () => {
                               className="btn-address-action btn-delete-address"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (window.confirm('Are you sure you want to delete this address?')) {
+                                if (
+                                  window.confirm(
+                                    "Are you sure you want to delete this address?"
+                                  )
+                                ) {
                                   handleDeleteAddress(key);
                                 }
                               }}
@@ -1110,7 +1398,7 @@ const OnlineStoreCheckout = () => {
                             </Button>
                           )}
                         </div>
-                        
+
                         <Form.Check
                           type="radio"
                           name="address"
@@ -1120,8 +1408,17 @@ const OnlineStoreCheckout = () => {
                         />
                         <div>
                           <strong>{addr.addressLine1}</strong>
-                          {addr.addressLine2 && <div className="text-muted small">{addr.addressLine2}</div>}
-                          {addr.landmark && <div className="text-muted small"><i className="fas fa-map-pin me-1"></i>{addr.landmark}</div>}
+                          {addr.addressLine2 && (
+                            <div className="text-muted small">
+                              {addr.addressLine2}
+                            </div>
+                          )}
+                          {addr.landmark && (
+                            <div className="text-muted small">
+                              <i className="fas fa-map-pin me-1"></i>
+                              {addr.landmark}
+                            </div>
+                          )}
                           <div className="text-muted small mt-1">
                             <i className="fas fa-location-dot me-1"></i>
                             {addr.city}, {addr.state} - {addr.pincode}
@@ -1134,10 +1431,14 @@ const OnlineStoreCheckout = () => {
 
                 {/* Edit Address Form */}
                 {editingAddressKey && (
-                  <Card className="mt-3" style={{ 
-                    background: "linear-gradient(145deg, rgba(42, 101, 197, 0.05) 0%, #fff 100%)", 
-                    border: "2px solid #2a65c5" 
-                  }}>
+                  <Card
+                    className="mt-3"
+                    style={{
+                      background:
+                        "linear-gradient(145deg, rgba(42, 101, 197, 0.05) 0%, #fff 100%)",
+                      border: "2px solid #2a65c5",
+                    }}
+                  >
                     <Card.Body>
                       <h6 className="mb-3" style={{ color: "#2a65c5" }}>
                         <i className="fas fa-edit me-2"></i>
@@ -1146,67 +1447,104 @@ const OnlineStoreCheckout = () => {
                       <Form>
                         <Form.Group className="mb-3">
                           <Form.Label>Address Line 1 *</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="Address Line 1" 
-                            value={editAddressForm.addressLine1} 
-                            onChange={(e) => setEditAddressForm({ ...editAddressForm, addressLine1: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="Address Line 1"
+                            value={editAddressForm.addressLine1}
+                            onChange={(e) =>
+                              setEditAddressForm({
+                                ...editAddressForm,
+                                addressLine1: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>Address Line 2</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="Address Line 2" 
-                            value={editAddressForm.addressLine2} 
-                            onChange={(e) => setEditAddressForm({ ...editAddressForm, addressLine2: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="Address Line 2"
+                            value={editAddressForm.addressLine2}
+                            onChange={(e) =>
+                              setEditAddressForm({
+                                ...editAddressForm,
+                                addressLine2: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>Landmark</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="Landmark" 
-                            value={editAddressForm.landmark} 
-                            onChange={(e) => setEditAddressForm({ ...editAddressForm, landmark: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="Landmark"
+                            value={editAddressForm.landmark}
+                            onChange={(e) =>
+                              setEditAddressForm({
+                                ...editAddressForm,
+                                landmark: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>Pincode *</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="Pincode" 
-                            value={editAddressForm.pincode} 
-                            onChange={(e) => setEditAddressForm({ ...editAddressForm, pincode: e.target.value })} 
-                            maxLength={6} 
+                          <Form.Control
+                            type="text"
+                            placeholder="Pincode"
+                            value={editAddressForm.pincode}
+                            onChange={(e) =>
+                              setEditAddressForm({
+                                ...editAddressForm,
+                                pincode: e.target.value,
+                              })
+                            }
+                            maxLength={6}
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>City *</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="City" 
-                            value={editAddressForm.city} 
-                            onChange={(e) => setEditAddressForm({ ...editAddressForm, city: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="City"
+                            value={editAddressForm.city}
+                            onChange={(e) =>
+                              setEditAddressForm({
+                                ...editAddressForm,
+                                city: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>State *</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="State" 
-                            value={editAddressForm.state} 
-                            onChange={(e) => setEditAddressForm({ ...editAddressForm, state: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="State"
+                            value={editAddressForm.state}
+                            onChange={(e) =>
+                              setEditAddressForm({
+                                ...editAddressForm,
+                                state: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <div className="d-grid gap-2 d-md-flex justify-content-md-end">
-                          <Button variant="outline-secondary" onClick={cancelEditAddress}>
+                          <Button
+                            variant="outline-secondary"
+                            onClick={cancelEditAddress}
+                          >
                             Cancel
                           </Button>
-                          <Button 
-                            variant="primary" 
+                          <Button
+                            variant="primary"
                             onClick={saveEditedAddress}
-                            style={{ background: "linear-gradient(316deg, rgb(42 101 197) 0%, rgb(10 80 177) 100%)", border: "none" }}
+                            style={{
+                              background:
+                                "linear-gradient(316deg, rgb(42 101 197) 0%, rgb(10 80 177) 100%)",
+                              border: "none",
+                            }}
                           >
                             <i className="fas fa-save me-2"></i>Update Address
                           </Button>
@@ -1217,77 +1555,124 @@ const OnlineStoreCheckout = () => {
                 )}
 
                 {/* Add New Address Form */}
-                {!showAddressForm && !editingAddressKey && addresses.length < 3 && (
-                  <Button variant="outline-success" className="w-100 mb-3" onClick={() => setShowAddressForm(true)}>
-                    <i className="fas fa-plus me-2"></i>Add New Address
-                  </Button>
-                )}
+                {!showAddressForm &&
+                  !editingAddressKey &&
+                  addresses.length < 3 && (
+                    <Button
+                      variant="outline-success"
+                      className="w-100 mb-3"
+                      onClick={() => setShowAddressForm(true)}
+                    >
+                      <i className="fas fa-plus me-2"></i>Add New Address
+                    </Button>
+                  )}
 
                 {showAddressForm && !editingAddressKey && (
                   <Card className="mt-3" style={{ backgroundColor: "#f8f9fa" }}>
                     <Card.Body>
-                      <h6 className="mb-3"><i className="fas fa-plus-circle me-2"></i>Add New Address</h6>
+                      <h6 className="mb-3">
+                        <i className="fas fa-plus-circle me-2"></i>Add New
+                        Address
+                      </h6>
                       <Form>
                         <Form.Group className="mb-3">
                           <Form.Label>Address Line 1 *</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="Address Line 1" 
-                            value={newAddress.addressLine1} 
-                            onChange={(e) => setNewAddress({ ...newAddress, addressLine1: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="Address Line 1"
+                            value={newAddress.addressLine1}
+                            onChange={(e) =>
+                              setNewAddress({
+                                ...newAddress,
+                                addressLine1: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>Address Line 2</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="Address Line 2" 
-                            value={newAddress.addressLine2} 
-                            onChange={(e) => setNewAddress({ ...newAddress, addressLine2: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="Address Line 2"
+                            value={newAddress.addressLine2}
+                            onChange={(e) =>
+                              setNewAddress({
+                                ...newAddress,
+                                addressLine2: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>Landmark</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="Landmark" 
-                            value={newAddress.landmark} 
-                            onChange={(e) => setNewAddress({ ...newAddress, landmark: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="Landmark"
+                            value={newAddress.landmark}
+                            onChange={(e) =>
+                              setNewAddress({
+                                ...newAddress,
+                                landmark: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>Pincode *</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="Pincode" 
-                            value={newAddress.pincode} 
-                            onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value })} 
-                            maxLength={6} 
+                          <Form.Control
+                            type="text"
+                            placeholder="Pincode"
+                            value={newAddress.pincode}
+                            onChange={(e) =>
+                              setNewAddress({
+                                ...newAddress,
+                                pincode: e.target.value,
+                              })
+                            }
+                            maxLength={6}
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>City *</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="City" 
-                            value={newAddress.city} 
-                            onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="City"
+                            value={newAddress.city}
+                            onChange={(e) =>
+                              setNewAddress({
+                                ...newAddress,
+                                city: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label>State *</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="State" 
-                            value={newAddress.state} 
-                            onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })} 
+                          <Form.Control
+                            type="text"
+                            placeholder="State"
+                            value={newAddress.state}
+                            onChange={(e) =>
+                              setNewAddress({
+                                ...newAddress,
+                                state: e.target.value,
+                              })
+                            }
                           />
                         </Form.Group>
                         <div className="d-grid gap-2">
-                          <Button className="btn-add-address" onClick={handleAddAddress}>
+                          <Button
+                            className="btn-add-address"
+                            onClick={handleAddAddress}
+                          >
                             <i className="fas fa-save me-2"></i>Save Address
                           </Button>
-                          <Button variant="outline-secondary" onClick={() => setShowAddressForm(false)}>Cancel</Button>
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => setShowAddressForm(false)}
+                          >
+                            Cancel
+                          </Button>
                         </div>
                       </Form>
                     </Card.Body>
@@ -1297,7 +1682,9 @@ const OnlineStoreCheckout = () => {
                 <Alert variant="info" className="mt-3">
                   <div className="d-flex align-items-center">
                     <i className="fas fa-truck me-2"></i>
-                    <small><strong>Estimated Delivery:</strong> 3-5 business days</small>
+                    <small>
+                      <strong>Estimated Delivery:</strong> 3-5 business days
+                    </small>
                   </div>
                 </Alert>
               </Card.Body>
@@ -1309,43 +1696,163 @@ const OnlineStoreCheckout = () => {
               <Card className="card-enhanced">
                 <Card.Body className="p-4">
                   <div className="d-flex align-items-center mb-4">
-                    <i className="fas fa-box-open me-3 text-primary" style={{ fontSize: "1.5rem" }}></i>
+                    <i
+                      className="fas fa-box-open me-3 text-primary"
+                      style={{ fontSize: "1.5rem" }}
+                    ></i>
                     <h4 className="mb-0">Order Items</h4>
-                    <Badge bg="secondary" className="ms-auto">{checkoutData.itemCount} Product{checkoutData.itemCount > 1 ? 's' : ''}</Badge>
+                    <Badge bg="secondary" className="ms-auto">
+                      {checkoutData.itemCount} Product
+                      {checkoutData.itemCount > 1 ? "s" : ""}
+                    </Badge>
                   </div>
+{checkoutData.items.length === 0 && <NoItemsRedirect />}
 
                   {checkoutData.items.length > 0 ? (
                     <div className="info-section mb-4">
                       <div className="info-label">Products</div>
                       {checkoutData.items.map((item, index) => (
-                        <div key={index} className={`product-card ${item.price === 0 ? 'customizable' : ''}`}>
-                          <img src={item.image} alt={item.name} className="product-image" />
+                        <div
+                          key={index}
+                          className={`product-card ${
+                            item.price === 0 ? "customizable" : ""
+                          }`}
+                        >
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="product-image"
+                          />
                           <div className="flex-grow-1">
                             <div className="fw-semibold">{item.name}</div>
-                            <small className="text-muted">{item.description}</small>
+                            <small className="text-muted">
+                              {item.description}
+                            </small>
                             <div className="mt-1">
-                              <small className="text-muted">Qty: {item.quantity}</small>
+                              <small className="text-muted">
+                                Qty: {item.quantity}
+                              </small>
                               <span className="mx-2">•</span>
                               {item.price === 0 ? (
                                 <>
-                                  <strong className="text-primary">₹{customizations[item.id]?.cost ? customizations[item.id].cost * item.quantity : 0}</strong>
+                                  <strong className="text-primary">
+                                    ₹
+                                    {customizations[item.id]?.cost
+                                      ? customizations[item.id].cost *
+                                        item.quantity
+                                      : 0}
+                                  </strong>
                                   {customizations[item.id]?.mediumText ? (
                                     <span className="customization-badge">
-                                      <i className="fas fa-check me-1"></i>Customized
+                                      <i className="fas fa-check me-1"></i>
+                                      Customized
                                     </span>
                                   ) : (
-                                    <Badge bg="danger" text="white" className="ms-2">
-                                      <i className="fas fa-exclamation-triangle me-1"></i>Needs Customization
+                                    <Badge
+                                      bg="danger"
+                                      text="white"
+                                      className="ms-2"
+                                    >
+                                      <i className="fas fa-exclamation-triangle me-1"></i>
+                                      Needs Customization
                                     </Badge>
                                   )}
                                 </>
                               ) : (
                                 <>
-                                  <strong className="text-success">₹{item.price}</strong>
+                                  {" "}
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "10px",
+                                      margin: "15px 0",
+                                      fontFamily: "Arial, sans-serif",
+                                      fontSize: "16px",
+                                      fontWeight: "500",
+                                    }}
+                                  >
+                                    Quantity:
+                                    <button
+                                      onClick={() =>
+                                        updateQuantity(
+                                          item.id,
+                                          item.quantity - 1
+                                        )
+                                      }
+                                      style={{
+                                        width: "30px",
+                                        height: "30px",
+                                        borderRadius: "5px",
+                                        border: "1px solid #ccc",
+                                        backgroundColor: "#f8f8f8",
+
+                                        fontSize: "20px",
+                                        fontWeight: "bold",
+                                        color: "#333",
+                                        transition:
+                                          "background-color 0.3s ease",
+                                      }}
+                                      onMouseEnter={(e) =>
+                                        (e.currentTarget.style.backgroundColor =
+                                          "#e2e2e2")
+                                      }
+                                      onMouseLeave={(e) =>
+                                        (e.currentTarget.style.backgroundColor =
+                                          "#f8f8f8")
+                                      }
+                                    >
+                                      -
+                                    </button>
+                                    <span
+                                      style={{
+                                        minWidth: "25px",
+                                        textAlign: "center",
+                                      }}
+                                    >
+                                      {item.quantity}
+                                    </span>
+                                    <button
+                                      onClick={() =>
+                                        updateQuantity(
+                                          item.id,
+                                          item.quantity + 1
+                                        )
+                                      }
+                                      style={{
+                                        width: "30px",
+                                        height: "30px",
+                                        borderRadius: "5px",
+                                        border: "1px solid #ccc",
+                                        backgroundColor: "#f8f8f8",
+                                        cursor: "pointer",
+                                        fontSize: "20px",
+                                        fontWeight: "bold",
+                                        color: "#333",
+                                        transition:
+                                          "background-color 0.3s ease",
+                                      }}
+                                      onMouseEnter={(e) =>
+                                        (e.currentTarget.style.backgroundColor =
+                                          "#e2e2e2")
+                                      }
+                                      onMouseLeave={(e) =>
+                                        (e.currentTarget.style.backgroundColor =
+                                          "#f8f8f8")
+                                      }
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                  <strong className="text-success">
+                                    ₹{item.price * item.quantity}
+                                  </strong>
                                   {item.off > 0 && (
                                     <>
                                       <span className="mx-2">•</span>
-                                      <Badge bg="danger" className="ms-1">{item.off}% OFF</Badge>
+                                      <Badge bg="danger" className="ms-1">
+                                        {item.off}% OFF
+                                      </Badge>
                                     </>
                                   )}
                                 </>
@@ -1353,58 +1860,100 @@ const OnlineStoreCheckout = () => {
                             </div>
                             {item.price === 0 && (
                               <div className="mt-2">
-                                <Button 
-                                  className="btn-customize" 
+                                <Button
+                                  className="btn-customize"
                                   size="sm"
                                   onClick={() => openCustomizationModal(item)}
                                 >
                                   <i className="fas fa-pencil-alt me-1"></i>
-                                  {customizations[item.id]?.bigText ? 'Edit Customization' : 'Add Customization'}
+                                  {customizations[item.id]?.bigText
+                                    ? "Edit Customization"
+                                    : "Add Customization"}
                                 </Button>
                                 {customizations[item.id]?.mediumText && (
                                   <div className="mt-2 p-2 bg-light rounded border">
                                     {customizations[item.id].bigText && (
                                       <small className="d-block">
-                                        <strong>Big Text:</strong> {customizations[item.id].bigText}
+                                        <strong>Big Text:</strong>{" "}
+                                        {customizations[item.id].bigText}
                                       </small>
                                     )}
                                     <small className="d-block">
-                                      <strong>Medium Text:</strong> {customizations[item.id].mediumText}
+                                      <strong>Medium Text:</strong>{" "}
+                                      {customizations[item.id].mediumText}
                                     </small>
                                     {customizations[item.id].smallText && (
                                       <small className="d-block">
-                                        <strong>Small Text:</strong> {customizations[item.id].smallText}
+                                        <strong>Small Text:</strong>{" "}
+                                        {customizations[item.id].smallText}
                                       </small>
                                     )}
-                                    {customizations[item.id].specialInstructions && (
+                                    {customizations[item.id]
+                                      .specialInstructions && (
                                       <small className="d-block text-success">
-                                        <strong>Special Instructions:</strong> {customizations[item.id].specialInstructions}
+                                        <strong>Special Instructions:</strong>{" "}
+                                        {
+                                          customizations[item.id]
+                                            .specialInstructions
+                                        }
                                       </small>
                                     )}
                                     <hr className="my-2" />
                                     <div className="mt-2">
                                       <small className="d-block text-muted">
-                                        <strong>Customization Cost Breakdown:</strong>
+                                        <strong>
+                                          Customization Cost Breakdown:
+                                        </strong>
                                       </small>
-                                      {customizations[item.id].bigTextChars > 0 && (
+                                      {customizations[item.id].bigTextChars >
+                                        0 && (
                                         <small className="d-block">
-                                          Big Text ({customizations[item.id].bigTextChars} chars × ₹10) = ₹{customizations[item.id].bigTextChars * 10}
+                                          Big Text (
+                                          {customizations[item.id].bigTextChars}{" "}
+                                          chars × ₹10) = ₹
+                                          {customizations[item.id]
+                                            .bigTextChars * 10}
                                         </small>
                                       )}
                                       <small className="d-block">
-                                        Medium Text ({customizations[item.id].mediumTextChars} chars × ₹8) = ₹{customizations[item.id].mediumTextChars * 8}
+                                        Medium Text (
+                                        {
+                                          customizations[item.id]
+                                            .mediumTextChars
+                                        }{" "}
+                                        chars × ₹8) = ₹
+                                        {customizations[item.id]
+                                          .mediumTextChars * 8}
                                       </small>
-                                      {customizations[item.id].smallTextChars > 0 && (
+                                      {customizations[item.id].smallTextChars >
+                                        0 && (
                                         <small className="d-block">
-                                          Small Text ({customizations[item.id].smallTextChars} chars × ₹5) = ₹{customizations[item.id].smallTextChars * 5}
+                                          Small Text (
+                                          {
+                                            customizations[item.id]
+                                              .smallTextChars
+                                          }{" "}
+                                          chars × ₹5) = ₹
+                                          {customizations[item.id]
+                                            .smallTextChars * 5}
                                         </small>
                                       )}
                                       <small className="d-block mt-1">
-                                        <strong>Per Item Cost: ₹{customizations[item.id].cost}</strong>
+                                        <strong>
+                                          Per Item Cost: ₹
+                                          {customizations[item.id].cost}
+                                        </strong>
                                       </small>
                                       {item.quantity > 1 && (
                                         <small className="d-block text-primary">
-                                          <strong>Total (₹{customizations[item.id].cost} × {item.quantity} qty) = ₹{customizations[item.id].cost * item.quantity}</strong>
+                                          <strong>
+                                            Total (₹
+                                            {
+                                              customizations[item.id].cost
+                                            } × {item.quantity} qty) = ₹
+                                            {customizations[item.id].cost *
+                                              item.quantity}
+                                          </strong>
                                         </small>
                                       )}
                                     </div>
@@ -1417,18 +1966,33 @@ const OnlineStoreCheckout = () => {
                       ))}
                     </div>
                   ) : (
+                   <div>
                     <Alert variant="warning" className="mb-4">
                       <i className="fas fa-exclamation-triangle me-2"></i>
-                      No items found in order.
+                      No items found for checkout.
                     </Alert>
+                
+                    
+                       </div>
                   )}
 
                   <div className="info-section mb-4">
                     <div className="info-label">Order Summary</div>
-                    <div className="row g-3">
+                    <div
+                      className="row g-3"
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        height: "100%",
+                      }}
+                    >
                       <div className="col-6">
                         <div className="text-center">
-                          <div className="h4 mb-1 text-primary">{checkoutData.totalQuantity}</div>
+                          <div className="h4 mb-1 text-primary">
+                            {checkoutData.totalQuantity}
+                          </div>
                           <small className="text-muted">Total Items</small>
                         </div>
                       </div>
@@ -1445,13 +2009,25 @@ const OnlineStoreCheckout = () => {
                       <span>₹{checkoutData.subtotal}</span>
                     </div>
                     {customizationCost > 0 && (
-                      <div className="price-row" style={{ color: '#2a65c5', borderBottom: '1px solid rgba(0, 0, 0, 0.1)' }}>
+                      <div
+                        className="price-row"
+                        style={{
+                          color: "#2a65c5",
+                          borderBottom: "1px solid rgba(0, 0, 0, 0.1)",
+                        }}
+                      >
                         <span>Customization Charges</span>
                         <span>₹{customizationCost}</span>
                       </div>
                     )}
                     {checkoutData.savings > 0 && (
-                      <div className="price-row" style={{ color: '#28a745', borderBottom: '1px solid rgba(0, 0, 0, 0.1)' }}>
+                      <div
+                        className="price-row"
+                        style={{
+                          color: "#28a745",
+                          borderBottom: "1px solid rgba(0, 0, 0, 0.1)",
+                        }}
+                      >
                         <span>You Save</span>
                         <span>-₹{checkoutData.savings}</span>
                       </div>
@@ -1460,35 +2036,120 @@ const OnlineStoreCheckout = () => {
                       <span>Delivery Charges</span>
                       <span>₹{deliveryPrice}</span>
                     </div>
+                    {discountPercent > 0 && (
+                      <div
+                        className="price-row"
+                        style={{
+                          color: " green",
+                          borderBottom: "1px solid rgba(0, 0, 0, 0.1)",
+                        }}
+                      >
+                        <span>Coupon Discount ({discountPercent}%) </span>
+                        <span> -₹{discountAmount.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="price-row">
                       <span>Grand Total</span>
-                      <span>₹{grandTotal}</span>
+                      <span>₹{grandTotal - discountAmount}</span>
                     </div>
                   </div>
 
                   {hasUncompletedCustomizations() && (
                     <Alert variant="warning" className="mb-3">
                       <i className="fas fa-exclamation-triangle me-2"></i>
-                      <strong>Action Required:</strong> Please complete customization for all customizable items before proceeding to payment.
+                      <strong>Action Required:</strong> Please complete
+                      customization for all customizable items before proceeding
+                      to payment.
                     </Alert>
                   )}
 
                   <div className="text-center">
-                    <Button 
-                      className="pay-button w-100" 
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "center",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="Enter coupon code"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                        style={{
+                          padding: "10px 15px",
+                          fontSize: "1rem",
+                          borderRadius: "25px",
+                          border: "1.5px solid #764ba2",
+                          outline: "none",
+                          transition: "border-color 0.3s ease",
+                          marginBottom: "15px",
+                          flexGrow: 1,
+                        }}
+                        onFocus={(e) =>
+                          (e.currentTarget.style.borderColor = "#667eea")
+                        }
+                        onBlur={(e) =>
+                          (e.currentTarget.style.borderColor = "#764ba2")
+                        }
+                      />
+                      <button
+                        onClick={handleApplyCoupon}
+                        disabled={
+                        checkoutData.items.length === 0 ||
+                        !selectedAddressKey ||
+                        hasUncompletedCustomizations()}
+                        className="btn-responsive" 
+                      
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background =
+                            "linear-gradient(90deg, #764ba2, #667eea)";
+                          e.currentTarget.style.transform = "scale(1.05)";
+                          e.currentTarget.style.boxShadow =
+                            "0 8px 20px rgba(118, 75, 162, 0.5)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background =
+                            "linear-gradient(90deg, #667eea, #764ba2)";
+                          e.currentTarget.style.transform = "scale(1)";
+                          e.currentTarget.style.boxShadow =
+                            "0 4px 15px rgba(118, 75, 162, 0.3)";
+                        }}
+                        onMouseDown={(e) => {
+                          e.currentTarget.style.transform = "scale(0.98)";
+                          e.currentTarget.style.boxShadow =
+                            "0 2px 10px rgba(118, 75, 162, 0.2)";
+                        }}
+                        onMouseUp={(e) => {
+                          e.currentTarget.style.transform = "scale(1.05)";
+                          e.currentTarget.style.boxShadow =
+                            "0 8px 20px rgba(118, 75, 162, 0.5)";
+                        }}
+                      >
+                        Apply Coupon
+                      </button>
+                    </div>
+
+                    <Button
+                      className="pay-button w-100"
                       size="lg"
                       onClick={handlePayNow}
-                      disabled={!selectedAddressKey || hasUncompletedCustomizations()}
+                      disabled={
+                        checkoutData.items.length === 0 ||
+                        !selectedAddressKey ||
+                        hasUncompletedCustomizations()
+                      }
                     >
                       <i className="fas fa-credit-card me-2"></i>
-                      Proceed to Pay ₹{grandTotal}
+                      Proceed to Pay ₹{grandTotal - discountAmount}
                     </Button>
                   </div>
 
                   <div className="security-note text-center mt-3">
                     <small>
                       <i className="fas fa-shield-alt me-2"></i>
-                      Secure payment powered by Razorpay. Your payment information is encrypted and secure.
+                      Secure payment powered by Razorpay. Your payment
+                      information is encrypted and secure.
                     </small>
                   </div>
                 </Card.Body>
@@ -1504,7 +2165,10 @@ const OnlineStoreCheckout = () => {
                 <Row className="g-4">
                   <Col md={4}>
                     <div className="mb-3">
-                      <i className="fas fa-shield-alt text-primary" style={{ fontSize: "2rem" }}></i>
+                      <i
+                        className="fas fa-shield-alt text-primary"
+                        style={{ fontSize: "2rem" }}
+                      ></i>
                     </div>
                     <h6>Secure Payment</h6>
                     <small className="text-muted">
@@ -1513,7 +2177,10 @@ const OnlineStoreCheckout = () => {
                   </Col>
                   <Col md={4}>
                     <div className="mb-3">
-                      <i className="fas fa-clock text-primary" style={{ fontSize: "2rem" }}></i>
+                      <i
+                        className="fas fa-clock text-primary"
+                        style={{ fontSize: "2rem" }}
+                      ></i>
                     </div>
                     <h6>Quick Delivery</h6>
                     <small className="text-muted">
@@ -1522,7 +2189,10 @@ const OnlineStoreCheckout = () => {
                   </Col>
                   <Col md={4}>
                     <div className="mb-3">
-                      <i className="fas fa-headset text-primary" style={{ fontSize: "2rem" }}></i>
+                      <i
+                        className="fas fa-headset text-primary"
+                        style={{ fontSize: "2rem" }}
+                      ></i>
                     </div>
                     <h6>24/7 Support</h6>
                     <small className="text-muted">
