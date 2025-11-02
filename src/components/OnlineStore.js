@@ -171,7 +171,8 @@ export default function ProductStore() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success(`${product.modelName} added to cart successfully!`);
+        toast.success(`${product.modelName} added to cart successfully!`,{autoClose: 850 
+});
       } else {
         toast.error(result.message || "Failed to add to cart");
       }

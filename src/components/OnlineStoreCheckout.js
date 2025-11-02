@@ -145,7 +145,15 @@ const OnlineStoreCheckout = () => {
     let updatedItems;
     if (newQuantity < 1) {
       // 1. Remove item in frontend state
-      toast.success("Redirectin to store")
+
+      if(checkoutData.items.length === 1 ){
+     
+        toast.success("Redireting to Store")
+      }
+      if(checkoutData.items.length !== 1)
+      toast.success("Removing item", {
+  autoClose: 500 
+});
       updatedItems = checkoutData.items.filter((item) => item.id !== itemId);
 
       // 2. Also call backend to delete item from DB cart
