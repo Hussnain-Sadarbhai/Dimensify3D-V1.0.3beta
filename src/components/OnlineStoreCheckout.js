@@ -145,6 +145,7 @@ const OnlineStoreCheckout = () => {
     let updatedItems;
     if (newQuantity < 1) {
       // 1. Remove item in frontend state
+      toast.success("Redirectin to store")
       updatedItems = checkoutData.items.filter((item) => item.id !== itemId);
 
       // 2. Also call backend to delete item from DB cart
@@ -1966,14 +1967,12 @@ function NoItemsRedirect() {
                       ))}
                     </div>
                   ) : (
-                   <div>
+                  
                     <Alert variant="warning" className="mb-4">
                       <i className="fas fa-exclamation-triangle me-2"></i>
                       No items found for checkout.
                     </Alert>
                 
-                    
-                       </div>
                   )}
 
                   <div className="info-section mb-4">
