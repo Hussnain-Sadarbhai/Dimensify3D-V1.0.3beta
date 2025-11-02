@@ -582,7 +582,7 @@ function NoItemsRedirect() {
       const deliveryCharge = checkoutData.items.length === 0 ? 0 : 40;
       const customizationCost = getTotalCustomizationCost();
       const grandTotal =
-        checkoutData.totalPrice + deliveryCharge + customizationCost;
+        checkoutData.totalPrice + deliveryCharge + customizationCost- discountAmount;
 
       const orderRes = await fetch(`${API_BASE_URL}/api/createOrder`, {
         method: "POST",
