@@ -106,6 +106,7 @@ const Header = () => {
     };
 
     const handleLogin = () => {
+        localStorage.setItem("last","/");
         navigate("/login");
     };
 

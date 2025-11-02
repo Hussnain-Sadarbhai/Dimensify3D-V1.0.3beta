@@ -209,7 +209,8 @@ export default function ProductStore() {
       state: { cartItems: [cartItem] } 
     });
     
-    toast.success(`Proceeding to checkout for ${product.modelName}`);
+    toast.success(`Proceeding to checkout for ${product.modelName}`,{autoClose: 850 
+});
   };
 
   const handleLoginRedirect = () => {

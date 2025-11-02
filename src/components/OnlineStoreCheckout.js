@@ -152,8 +152,8 @@ const OnlineStoreCheckout = () => {
       }
       if(checkoutData.items.length !== 1)
       toast.success("Removing item", {
-  autoClose: 500 
-});
+            autoClose: 500 
+          });
       updatedItems = checkoutData.items.filter((item) => item.id !== itemId);
 
       // 2. Also call backend to delete item from DB cart
