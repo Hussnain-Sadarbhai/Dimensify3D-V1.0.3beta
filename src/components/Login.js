@@ -350,8 +350,8 @@ const LoginPage = () => {
                   fontWeight: '500'
                 }}>Access your Dimensify3D account</p>
               </div>
-
-              <div onSubmit={handleSubmit}>
+<form onSubmit={handleSubmit}>
+              <div >
                 {/* Phone Field */}
                 <div style={{ marginBottom: '24px' }}>
                   <label style={{
@@ -588,6 +588,7 @@ const LoginPage = () => {
                   </p>
                 </div>
               </div>
+              </form>
             </div>
           </div>
         </div>

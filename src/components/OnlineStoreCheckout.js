@@ -77,7 +77,8 @@ const OnlineStoreCheckout = () => {
   const [finalPrice, setFinalPrice] = useState(
     checkoutData ? checkoutData.totalPrice : 0
   );
-
+  const [limit, setLimit] = useState(0)
+  const [expired,setExpired]=useState(0)
   function handleApplyCoupon() {
     fetch(`${API_BASE_URL}/api/coupons`)
       .then((res) => res.json())
@@ -85,6 +86,8 @@ const OnlineStoreCheckout = () => {
         const coupon = data.data.find(
           (c) => c.name.toLowerCase() === couponCode.toLowerCase()
         );
+
+
         if (!coupon) {
           toast.error("Invalid coupon code");
           setDiscountPercent(0);
@@ -92,13 +95,20 @@ const OnlineStoreCheckout = () => {
           setFinalPrice(checkoutData.totalPrice);
           return;
         }
-        if (Date.now() > coupon.expiry) {
+        if(coupon.limit===0){
+          toast.error("coupon reached max Global usage limit")
+          return;
+        }
+         const expiryDate = new Date(coupon.expiry);
+        if (Date.now() > expiryDate) {
+          setExpired(1)
           toast.error("Coupon expired");
           setDiscountPercent(0);
           setDiscountAmount(0);
           setFinalPrice(checkoutData.totalPrice);
           return;
         }
+   
         const discount = coupon.discount; // percent discount
         setDiscountPercent(discount);
         const discountAmt = (checkoutData.totalPrice * discount) / 100;
@@ -106,6 +116,10 @@ const OnlineStoreCheckout = () => {
         setFinalPrice(checkoutData.totalPrice - discountAmt);
 
         toast.success(`Coupon applied! Discount: ${discount}%`);
+        if(coupon.limit && coupon.limit>0){
+          setLimit(coupon.limit);
+        }
+        
       })
       .catch(() => {
         toast.error("Failed to apply coupon");
@@ -558,6 +572,7 @@ function NoItemsRedirect() {
   };
 
   const handlePayNow = async () => {
+            
     try {
       if (hasUncompletedCustomizations()) {
         toast.error(
@@ -590,8 +605,8 @@ function NoItemsRedirect() {
 
       const deliveryCharge = checkoutData.items.length === 0 ? 0 : 40;
       const customizationCost = getTotalCustomizationCost();
-      const grandTotal =
-        checkoutData.totalPrice + deliveryCharge + customizationCost- discountAmount;
+      const grandTotal = 
+       checkoutData.totalPrice + deliveryCharge + customizationCost- discountAmount;
 
       const orderRes = await fetch(`${API_BASE_URL}/api/createOrder`, {
         method: "POST",
@@ -628,9 +643,10 @@ function NoItemsRedirect() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(response),
             });
-
+            
+             
             const verifyData = await verifyRes.json();
-
+           
             if (verifyData.success) {
               const orderData = {
                 phone: userPhone,
@@ -691,7 +707,7 @@ function NoItemsRedirect() {
                   body: JSON.stringify(orderData),
                 }
               );
-
+             
               const orderStoreData = await orderStoreRes.json();
               if (orderStoreData.success) {
                 for (const item of checkoutData.items) {
@@ -703,7 +719,34 @@ function NoItemsRedirect() {
                       cartItemId: item.id,
                     }),
                   });
+
+                  if(discountAmount!==0){
+                    const discountCouponCode=couponCode;
+                    const newlimit=limit-1;
+              try {
+              // If a coupon was used and coupon code is available in your order data:
+              if (discountCouponCode && limit !== 0 && expired===0) {
+                const couponUpdateRes = await fetch(`${API_BASE_URL}/api/decrementCouponLimit`, {
+                  method: "PATCH", // or POST depending on your API design
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ couponCode: discountCouponCode,
+                                        couponlimit:newlimit
+                  }),
+                });
+              
+                const couponUpdateData = await couponUpdateRes.json();
+               
+                if (!couponUpdateData.success) {
+                    console.log("UNSICUU");
+                  // You might want to handle this error depending on your flow
                 }
+              }
+              // rest of your code to store order and clear cart
+            } catch (couponErr) {
+              console.error("Coupon limit update error:", couponErr);
+          
+            }}
+                          }
 
                 setIsProcessingOrder(false);
                 setTimeout(() => {
