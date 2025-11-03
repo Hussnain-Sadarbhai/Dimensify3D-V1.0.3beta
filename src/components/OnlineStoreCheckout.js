@@ -2125,7 +2125,8 @@ function NoItemsRedirect() {
                         type="text"
                         placeholder="Enter coupon code"
                         value={couponCode}
-                        onChange={(e) => setCouponCode(e.target.value)}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+
                         style={{
                           padding: "10px 15px",
                           fontSize: "1rem",
