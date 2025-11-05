@@ -33,6 +33,8 @@ import AdminOnlineStoreOrderPrint from "./components/AdminOnlineStoreOrderPrint"
 import AdminTransaction from "./components/AdminTransaction";
 import Account from "./components/Account";
 import ItemDetails from "./components/ItemDetails";
+import ProtectedStoreRoute from "./components/ProtectedStoreRoute";
+import OnlineStoreLogin from "./components/OnlineStoreLogin";
 
 // Protected Route Component
 const ProtectedAdminRoute = ({ children }) => {
@@ -63,7 +65,15 @@ function App() {
           <Route path="/cancellationRefundpolicy" element={<CancellationRefundPolicy />} />
           <Route path="/termsconditions" element={<TermsConditions />} />
           <Route path="/privacypolicy" element={<PrivacyPolicy />} />
-          <Route path="/onlinestore" element={<OnlineStore />} />
+          <Route
+    path="/onlinestore"
+    element={
+      <ProtectedStoreRoute>
+        <OnlineStore />
+      </ProtectedStoreRoute>
+    }
+  />
+  <Route path="/onlinestorelogin" element={<OnlineStoreLogin />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/onlinestorecheckout" element={<OnlineStoreCheckout />} />
